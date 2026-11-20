@@ -1,0 +1,47 @@
+# Local development: `docker compose up -d db` for PostgreSQL only, or
+# `docker compose up --build` for PostgreSQL + the API.
+name: billing
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: billing
+      POSTGRES_PASSWORD: billing
+      POSTGRES_DB: billing
+    ports:
+      - '5433:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U billing -d billing']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      LOG_LEVEL: info
+      # Runtime queries as the RLS-bound role; migrations (on start) as the owner.
+      DATABASE_URL: postgresql://billing_app:billing_app@db:5432/billing?schema=public
+      DIRECT_URL: postgresql://billing:billing@db:5432/billing?schema=public
+      # Local only — production secrets come from the environment / a secret manager.
+      JWT_ACCESS_SECRET: compose-local-access-secret-0123456789abcdef
+      CORS_ORIGINS: http://localhost:3000,kirana://pos
+      SWAGGER_ENABLED: 'true'
+    volumes:
+      - uploads:/app/storage
+    ports:
+      - '4000:4000'
+    profiles: ['api']
+
+volumes:
+  pgdata:
+  uploads:

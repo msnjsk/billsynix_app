@@ -1,0 +1,19 @@
+-- Least-privilege role the API connects as (DATABASE_URL). Run as the schema owner — the role
+-- migrations use (DIRECT_URL) — once per database. Not a superuser and NOBYPASSRLS, so
+-- row-level security applies to it. Use a strong password outside local development:
+--   psql "$DIRECT_URL" -v app_password='<strong password>' -f app-role.psql
+\if :{?app_password}
+\else
+  \set app_password billing_app
+\endif
+
+SELECT format('CREATE ROLE billing_app LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE', :'app_password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'billing_app') \gexec
+
+SELECT format('GRANT CONNECT ON DATABASE %I TO billing_app', current_database()) \gexec
+GRANT USAGE ON SCHEMA public TO billing_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO billing_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO billing_app;
+-- Tables created later by this owner (i.e. by migrations) are granted automatically.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO billing_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO billing_app;
