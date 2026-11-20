@@ -6,4 +6,5 @@ src/generated/
 .env.*
 !.env.example
 *.tsbuildinfo
-storage/
+# Uploaded files (STORAGE_DRIVER=local) — only the top-level folder; src/storage is code.
+/storage/
